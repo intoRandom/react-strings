@@ -1,0 +1,41 @@
+{
+	"name": "react-strings",
+	"version": "0.1.0",
+	"description": "Keep your content organized, easy to update, and multilingual—built for React.",
+	"keywords": [
+		"react",
+		"nextjs",
+		"typescript",
+		"strings",
+		"intl",
+		"internationalization",
+		"i18n",
+		"static"
+	],
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"files": [
+		"dist/"
+	],
+	"scripts": {
+		"build": "tsc"
+	},
+	"author": "intoRandom",
+	"license": "MIT",
+	"peerDependencies": {
+		"react-dom": ">=18"
+	},
+	"devDependencies": {
+		"@types/react": "^19.1.10",
+		"@types/react-dom": "^19.1.7",
+		"typescript": "^5.9.2"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/intoRandom/react-strings.git"
+	},
+	"bugs": {
+		"url": "https://github.com/intoRandom/react-strings/issues"
+	},
+	"homepage": "https://github.com/intoRandom/react-strings#readme"
+}
