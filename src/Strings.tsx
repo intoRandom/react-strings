@@ -10,115 +10,189 @@ import {
 	useState,
 } from 'react';
 
-import { flushSync } from 'react-dom';
-
-import { makeAccessorArray, makeAccessorString } from './lib';
-
-import { DEFAULT_BGCOLOR, DEFAULT_DURATION } from './types';
-import type { StringsContextType, StringsConfigType } from './types';
 import { TransitionComponent } from './Transition';
 
-export function createStrings<T extends Record<string, any>>(
-	stringsConfig: StringsConfigType<T>
-) {
+import {
+	getBrowserLanguage,
+	makeAccessorArray,
+	makeAccessorString,
+	normalizeConfig,
+} from './lib';
+
+import { DEFAULT_BGCOLOR, DEFAULT_DURATION } from './types';
+import type { StringsContext, StringsConfig, LanguageInfo } from './types';
+
+export function createStrings<
+	D extends Record<string, any>,
+	L extends Record<string, LanguageInfo>
+>(stringsConfig: StringsConfig<D, L>) {
 	const {
-		defaultLang,
-		languages,
-		mode,
+		strings,
+		browser = false,
+		storage = false,
 		bgColor = DEFAULT_BGCOLOR,
 		duration = DEFAULT_DURATION,
 	} = stringsConfig;
 
-	const stringsDefault = languages[defaultLang];
+	const { key: stringsKey, data: stringsData } = strings;
 
-	type DefaultKeys = T[typeof defaultLang];
+	const normalized = normalizeConfig(stringsConfig);
 
-	const defaultStringsContext: StringsContextType<DefaultKeys> = {
-		language: '',
+	const defaultStringsContext: StringsContext<D> = {
+		language: stringsKey,
 		setLanguage: () => {},
-		Str: {} as ReturnType<typeof makeAccessorString<DefaultKeys>>,
-		Arr: [] as ReturnType<typeof makeAccessorArray<DefaultKeys>>,
+		Str: {} as ReturnType<typeof makeAccessorString<D>>,
+		Arr: [] as ReturnType<typeof makeAccessorArray<D>>,
 	};
 
-	const StringsContext = createContext<StringsContextType<DefaultKeys>>(
+	const StringsContext = createContext<StringsContext<D>>(
 		defaultStringsContext
 	);
 
-	const StringsProvider = ({ children }: { children: ReactNode }) => {
-		const [language, setLanguage] = useState<string>(String(defaultLang));
+	/* Provider */
+
+	const StringsProvider = ({
+		children,
+		locale,
+	}: {
+		children: ReactNode;
+		locale?: typeof stringsKey;
+	}) => {
+		const [language, setLanguage] = useState<string>(
+			locale ? String(locale) : ''
+		);
+
+		const [translation, setTranslation] = useState<D | undefined>(undefined);
+
+		const [contentDir, setContentDir] = useState<'ltr' | 'rtl' | undefined>(
+			undefined
+		);
 
 		const [isReady, setIsReady] = useState<boolean>(false);
 
-		const currentTranslations = useMemo(() => {
-			return languages[language] || stringsDefault || {};
-		}, [language, languages, defaultLang]);
-
 		useEffect(() => {
-			const loadConfig = () => {
-				let configLang = String(defaultLang);
+			if (locale) return;
 
-				if (mode === 'localStorage') {
+			const loadConfig = () => {
+				let configLang = stringsKey;
+
+				if (storage) {
 					try {
 						const savedLang = localStorage.getItem('lang');
-						if (savedLang && languages[savedLang]) {
+						if (savedLang && normalized[savedLang]) {
 							configLang = savedLang;
 						} else {
-							localStorage.setItem('lang', String(configLang));
+							if (browser) {
+								configLang = getBrowserLanguage(
+									Object.keys(normalized),
+									configLang
+								);
+							}
+							localStorage.setItem('lang', configLang);
 						}
 					} catch {
-						console.warn('localStorage not available, using default language:');
+						console.warn(
+							'localStorage not available, using default language:',
+							stringsKey
+						);
 					}
-
-					setLanguage(configLang);
+				} else if (browser) {
+					configLang = getBrowserLanguage(Object.keys(normalized), configLang);
 				}
-				document.documentElement.lang = configLang;
 
-				setIsReady(true);
+				setLanguage(configLang);
+				document.documentElement.lang = configLang;
 			};
 
 			loadConfig();
 		}, []);
 
-		const changeLanguage = useCallback(
-			(newLang: string) => {
-				if (languages[newLang]) {
-					if (language !== newLang) {
-						flushSync(() => {
-							setIsReady(false);
-						});
+		useEffect(() => {
+			if (language === '') return;
 
-						flushSync(() => {
-							setLanguage(newLang);
-							document.documentElement.lang = newLang;
-							if (mode === 'localStorage') {
-								try {
-									localStorage.setItem('lang', newLang);
-								} catch {
-									console.warn('Could not save language preference');
-								}
-							}
-						});
+			let cancelled = false;
+			const loadLanguage = async () => {
+				const lang = normalized[language];
+				if (!lang) return;
 
+				try {
+					if (lang.data) {
+						if (!cancelled) setTranslation(lang.data);
+					} else if (lang.loader) {
+						const module = await lang.loader();
+						normalized[language] = {
+							...lang,
+							data: module.default || module,
+						};
+						if (!cancelled) {
+							setTranslation(module.default || module);
+							setContentDir(normalized[language].direction);
+						}
+					} else {
+						if (!cancelled) {
+							setTranslation(normalized[stringsKey].data);
+						}
+						setContentDir(normalized[stringsKey].direction);
+					}
+				} catch (error) {
+					console.error(
+						`Failed to load language "${language}", falling back to default "${stringsKey}".`,
+						error
+					);
+					if (!cancelled) {
+						setTranslation(normalized[stringsKey].data);
+						setContentDir(normalized[stringsKey].direction);
+					}
+				} finally {
+					if (!cancelled) {
 						setTimeout(() => {
 							setIsReady(true);
 						}, duration);
 					}
-				} else {
+				}
+			};
+
+			loadLanguage();
+			return () => {
+				cancelled = true;
+			};
+		}, [language, normalized, duration]);
+
+		const changeLanguage = useCallback(
+			async (newLang: string) => {
+				if (locale) return;
+
+				if (language === newLang) return;
+
+				const lang = normalized[newLang];
+				if (!lang) {
 					console.error(`Language: ${newLang} was not found in config file`);
+					return;
+				}
+
+				setIsReady(false);
+				setLanguage(newLang);
+				document.documentElement.lang = newLang;
+				if (storage) {
+					try {
+						localStorage.setItem('lang', newLang);
+					} catch {
+						console.warn('Could not save language preference');
+					}
 				}
 			},
-			[language, languages, mode, duration]
+			[language, storage, normalized]
 		);
 
 		const getString = useCallback(() => {
-			return makeAccessorString(stringsDefault, currentTranslations);
-		}, [stringsDefault, currentTranslations]);
+			return makeAccessorString(stringsData, translation);
+		}, [stringsData, translation]);
 
 		const getArray = useCallback(() => {
-			return makeAccessorArray(stringsDefault, currentTranslations);
-		}, [stringsDefault, currentTranslations]);
+			return makeAccessorArray(stringsData, translation);
+		}, [stringsData, translation]);
 
-		const langContextValue = useMemo<StringsContextType<DefaultKeys>>(
+		const langContextValue = useMemo<StringsContext<D>>(
 			() => ({
 				language,
 				setLanguage: changeLanguage,
@@ -133,6 +207,7 @@ export function createStrings<T extends Record<string, any>>(
 				<TransitionComponent
 					bgColor={bgColor}
 					duration={duration}
+					direction={contentDir}
 					isReady={isReady}
 				>
 					{children}
@@ -149,9 +224,10 @@ export function createStrings<T extends Record<string, any>>(
 				'useStrings must be used within a <StringsProvider>. ' +
 					'Did you forget to wrap your component?'
 			);
+			return defaultStringsContext;
+		} else {
+			return context;
 		}
-
-		return context;
 	};
 
 	return { useStrings, StringsProvider };

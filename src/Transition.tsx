@@ -4,10 +4,11 @@ export const TransitionComponent: FC<{
 	children: ReactNode;
 	bgColor: string;
 	duration: number;
+	direction: 'ltr' | 'rtl' | undefined;
 	isReady: boolean;
-}> = ({ children, bgColor, duration, isReady }) => {
+}> = ({ children, bgColor, duration, direction = 'ltr', isReady }) => {
 	return (
-		<div style={{ position: 'relative', width: '100vw', height: '100vh' }}>
+		<div style={{ position: 'relative' }} dir={direction}>
 			{children}
 			<div
 				style={{

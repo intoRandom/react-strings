@@ -1,4 +1,10 @@
-import type { AccessorString, AccessorArray, Vars } from './types';
+import type {
+	AccessorString,
+	AccessorArray,
+	Vars,
+	StringsConfig,
+	NormalizedStrings,
+} from './types';
 
 export function makeAccessorString<T extends object>(
 	objKeys: T,
@@ -72,4 +78,51 @@ export function makeAccessorArray<T extends object>(
 	}
 
 	return result;
+}
+
+export function getBrowserLanguage(
+	supportedLanguages: string[],
+	fallback: string
+): string {
+	if (typeof navigator === 'undefined') return fallback;
+
+	const browserLangs = navigator.languages || [navigator.language];
+
+	for (const lang of browserLangs) {
+		if (supportedLanguages.includes(lang)) {
+			return lang;
+		}
+
+		const baseLang = lang.split('-')[0];
+		if (supportedLanguages.includes(baseLang)) {
+			return baseLang;
+		}
+	}
+
+	return fallback;
+}
+
+export function normalizeConfig<T extends Record<string, any>>(
+	stringsConfig: StringsConfig<T>
+): Record<string, NormalizedStrings<T>> {
+	const normalized: Record<string, NormalizedStrings<T>> = {};
+
+	normalized[stringsConfig.strings.key] = {
+		data: stringsConfig.strings.data,
+		direction: stringsConfig.strings.direction,
+	};
+
+	if (stringsConfig.languages) {
+		for (const [key, langInfo] of Object.entries(stringsConfig.languages)) {
+			if (normalized[key]) {
+				continue;
+			}
+			normalized[key] = {
+				loader: langInfo.loader,
+				direction: langInfo.direction,
+			};
+		}
+	}
+
+	return normalized;
 }
