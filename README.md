@@ -20,7 +20,7 @@ A lightweight solution for managing languages and preferences with ease.
 - **Persistent User Preferences 🔒**  
   Automatically saves and restores the user’s language choice using `localStorage`.
 - **No Extra Server Configuration 🙅🏻**  
-  Ideal for apps with zero need for additional server setup or configurations.
+  Ideal for apps with zero need for additional setup or configurations.
 - **Fast & Simple Integration 🚀**  
   Install, configure, and start using in just a few minutes.
 - **TypeScript Ready 🧩**  
@@ -36,7 +36,7 @@ import { useStrings } from '@/data/stringConfig';
 
 export default function Home() {
   const { Str, Arr} = useStrings();
-  const ver = '0.1.0';
+  const ver = '0.2.0';
 
   return (
   <>
@@ -44,10 +44,10 @@ export default function Home() {
       <h1>{Str.home.title()}</h1>
       <p>{Str.home.version({ version: ver })}</p>
       <ul>
-        {Arr.home.features.map((item) => (
-          <li key={item.title}>
-            <h2>{item.title}</h2>
-            <p>{item.data}</p>
+        {Arr.home.features.map((obj, index) => (
+          <li key={index}>
+            <h2>{obj.item}</h2>
+            <p>{obj.data}</p>
           </li>
         ))}
       </ul>
@@ -62,9 +62,9 @@ export default function Home() {
 	"title": "Welcome to react-strings",
 	"version": "Current version: {{version}}",
 	"features": [
-		{ "title": "Autocompletion", "data": "No need to remember keys" },
-		{ "title": "Multi language", "data": "Single and multi language support" },
-		{ "title": "Local Storage", "data": "For persistence across sessions" }
+		{ "item": "Autocompletion", "data": "Remember keys" },
+		{ "item": "Languages", "data": "Multi language support" },
+		{ "item": "Identification", "data": "Browser & storage" }
 	]
 }
 ```

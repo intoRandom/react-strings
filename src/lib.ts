@@ -27,7 +27,16 @@ export function makeAccessorString<T extends object>(
 			if (valKeys && typeof valKeys === 'object' && !Array.isArray(valKeys)) {
 				result[key] = makeAccessorString(valKeys, {}, currentPath);
 			} else {
-				result[key] = () => currentPath;
+				if (
+					process.env.NODE_ENV === 'production' &&
+					typeof valKeys === 'string'
+				) {
+					const tpl = valKeys;
+					result[key] = (repl?: Vars) =>
+						tpl.includes('{{') ? interpolate(tpl, repl) : tpl;
+				} else {
+					result[key] = () => currentPath;
+				}
 			}
 		} else if (typeof valValues === 'string') {
 			const tpl = valValues;
@@ -68,7 +77,11 @@ export function makeAccessorArray<T extends object>(
 			if (Array.isArray(valValues)) {
 				result[key] = valValues;
 			} else {
-				result[key] = [];
+				if (process.env.NODE_ENV === 'production') {
+					result[key] = valKeys;
+				} else {
+					result[key] = [];
+				}
 			}
 		} else if (typeof valKeys === 'object' && valKeys !== null) {
 			result[key] = makeAccessorArray(valKeys as any, valValues, currentPath);
@@ -107,10 +120,13 @@ export function normalizeConfig<T extends Record<string, any>>(
 ): Record<string, NormalizedStrings<T>> {
 	const normalized: Record<string, NormalizedStrings<T>> = {};
 
-	normalized[stringsConfig.strings.key] = {
-		data: stringsConfig.strings.data,
-		direction: stringsConfig.strings.direction,
-	};
+	const [firstKey, firstValue] = Object.entries(stringsConfig.strings)[0] ?? [];
+	if (firstKey && firstValue) {
+		normalized[firstKey] = {
+			data: firstValue.data,
+			direction: firstValue.direction,
+		};
+	}
 
 	if (stringsConfig.languages) {
 		for (const [key, langInfo] of Object.entries(stringsConfig.languages)) {
@@ -125,4 +141,38 @@ export function normalizeConfig<T extends Record<string, any>>(
 	}
 
 	return normalized;
+}
+
+export function getLanguageFromConfig(
+	normalized: Record<string, any>,
+	stringsKey: string,
+	storage: boolean,
+	browser: boolean
+): string {
+	let configLang = stringsKey;
+
+	if (storage) {
+		try {
+			const savedLang = localStorage.getItem('lang');
+			if (savedLang && normalized[savedLang]) {
+				return savedLang;
+			} else {
+				if (browser) {
+					configLang = getBrowserLanguage(Object.keys(normalized), configLang);
+				}
+				localStorage.setItem('lang', configLang);
+				return configLang;
+			}
+		} catch {
+			console.warn(
+				'localStorage not available, using default language:',
+				stringsKey
+			);
+			return stringsKey;
+		}
+	} else if (browser) {
+		return getBrowserLanguage(Object.keys(normalized), configLang);
+	}
+
+	return configLang;
 }

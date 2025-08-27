@@ -1,6 +1,6 @@
 {
 	"name": "react-strings",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Keep your content organized, easy to update, and multilingual—built for React.",
 	"keywords": [
 		"react",
@@ -26,6 +26,7 @@
 		"react-dom": ">=18"
 	},
 	"devDependencies": {
+		"@types/node": "^24.3.0",
 		"@types/react": "^19.1.10",
 		"@types/react-dom": "^19.1.7",
 		"typescript": "^5.9.2"

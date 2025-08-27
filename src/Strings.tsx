@@ -13,19 +13,27 @@ import {
 import { TransitionComponent } from './Transition';
 
 import {
-	getBrowserLanguage,
+	getLanguageFromConfig,
 	makeAccessorArray,
 	makeAccessorString,
 	normalizeConfig,
 } from './lib';
 
 import { DEFAULT_BGCOLOR, DEFAULT_DURATION } from './types';
-import type { StringsContext, StringsConfig, LanguageInfo } from './types';
+import type {
+	StringsContext,
+	StringsConfig,
+	LanguageInfo,
+	DefaultStrings,
+} from './types';
 
 export function createStrings<
-	D extends Record<string, any>,
-	L extends Record<string, LanguageInfo>
->(stringsConfig: StringsConfig<D, L>) {
+	S extends Record<string, DefaultStrings<any>>,
+	D extends Record<string, any> = S[keyof S]['data'] extends Record<string, any>
+		? S[keyof S]['data']
+		: Record<string, any>,
+	L extends Record<string, LanguageInfo> = Record<string, LanguageInfo>
+>(stringsConfig: StringsConfig<D, S, L>) {
 	const {
 		strings,
 		browser = false,
@@ -34,9 +42,14 @@ export function createStrings<
 		duration = DEFAULT_DURATION,
 	} = stringsConfig;
 
-	const { key: stringsKey, data: stringsData } = strings;
+	const stringsKey = Object.keys(strings)[0];
+	const stringsData = strings[stringsKey].data;
 
 	const normalized = normalizeConfig(stringsConfig);
+
+	const getLocale = () => {
+		return getLanguageFromConfig(normalized, stringsKey, storage, browser);
+	};
 
 	const defaultStringsContext: StringsContext<D> = {
 		language: stringsKey,
@@ -56,7 +69,8 @@ export function createStrings<
 		locale,
 	}: {
 		children: ReactNode;
-		locale?: typeof stringsKey;
+		/* locale?: keyof S | keyof L; */
+		locale?: string;
 	}) => {
 		const [language, setLanguage] = useState<string>(
 			locale ? String(locale) : ''
@@ -74,31 +88,12 @@ export function createStrings<
 			if (locale) return;
 
 			const loadConfig = () => {
-				let configLang = stringsKey;
-
-				if (storage) {
-					try {
-						const savedLang = localStorage.getItem('lang');
-						if (savedLang && normalized[savedLang]) {
-							configLang = savedLang;
-						} else {
-							if (browser) {
-								configLang = getBrowserLanguage(
-									Object.keys(normalized),
-									configLang
-								);
-							}
-							localStorage.setItem('lang', configLang);
-						}
-					} catch {
-						console.warn(
-							'localStorage not available, using default language:',
-							stringsKey
-						);
-					}
-				} else if (browser) {
-					configLang = getBrowserLanguage(Object.keys(normalized), configLang);
-				}
+				const configLang = getLanguageFromConfig(
+					normalized,
+					stringsKey,
+					storage,
+					browser
+				);
 
 				setLanguage(configLang);
 				document.documentElement.lang = configLang;
@@ -111,43 +106,45 @@ export function createStrings<
 			if (language === '') return;
 
 			let cancelled = false;
+
+			const setLanguageData = (data: any, direction: any) => {
+				if (!cancelled) {
+					setTranslation(data);
+					setContentDir(direction);
+				}
+			};
+			const fallbackToDefault = () => {
+				if (!cancelled) {
+					const defaultLang = normalized[stringsKey];
+					setLanguageData(defaultLang.data, defaultLang.direction);
+				}
+			};
+
 			const loadLanguage = async () => {
 				const lang = normalized[language];
 				if (!lang) return;
 
 				try {
 					if (lang.data) {
-						if (!cancelled) setTranslation(lang.data);
+						setLanguageData(lang.data, lang.direction);
 					} else if (lang.loader) {
 						const module = await lang.loader();
-						normalized[language] = {
-							...lang,
-							data: module.default || module,
-						};
-						if (!cancelled) {
-							setTranslation(module.default || module);
-							setContentDir(normalized[language].direction);
-						}
+						const loadedData = module.default || module;
+
+						normalized[language] = { ...lang, data: loadedData };
+						setLanguageData(loadedData, lang.direction);
 					} else {
-						if (!cancelled) {
-							setTranslation(normalized[stringsKey].data);
-						}
-						setContentDir(normalized[stringsKey].direction);
+						fallbackToDefault();
 					}
 				} catch (error) {
 					console.error(
 						`Failed to load language "${language}", falling back to default "${stringsKey}".`,
 						error
 					);
-					if (!cancelled) {
-						setTranslation(normalized[stringsKey].data);
-						setContentDir(normalized[stringsKey].direction);
-					}
+					fallbackToDefault();
 				} finally {
 					if (!cancelled) {
-						setTimeout(() => {
-							setIsReady(true);
-						}, duration);
+						setTimeout(() => setIsReady(true), duration);
 					}
 				}
 			};
@@ -230,5 +227,5 @@ export function createStrings<
 		}
 	};
 
-	return { useStrings, StringsProvider };
+	return { useStrings, StringsProvider, getLocale };
 }

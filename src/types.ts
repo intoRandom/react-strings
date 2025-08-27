@@ -4,8 +4,9 @@ import { makeAccessorArray, makeAccessorString } from './lib';
 
 type TextDirection = 'ltr' | 'rtl';
 
-type DefaultStrings<D extends Record<string, any> = Record<string, any>> = {
-	key: string;
+export type DefaultStrings<
+	D extends Record<string, any> = Record<string, any>
+> = {
 	data: D;
 	direction?: TextDirection;
 };
@@ -17,9 +18,13 @@ export type LanguageInfo = {
 
 export type StringsConfig<
 	D extends Record<string, any> = Record<string, any>,
+	S extends Record<string, DefaultStrings<D>> = Record<
+		string,
+		DefaultStrings<D>
+	>,
 	L extends Record<string, LanguageInfo> = Record<string, LanguageInfo>
 > = {
-	strings: DefaultStrings<D>;
+	strings: S;
 	languages?: L;
 	browser?: boolean;
 	storage?: boolean;

@@ -1,19 +1,10 @@
-strings -> data, key
-languages -> languageConfig optional
-
-Flow
-pass fallback object
-provider recibe locale
-change, locale, load language on demand
-
-locale
-return locales keys
-getstaticparams <- locales
-provider -> prop locale keyof locales
-
 ******
-on language change update translations
-check is ready Flow
-
 version 0.2.0
 documentación
+
+config
+language
+provider
+locale
+get strings
+get locale
