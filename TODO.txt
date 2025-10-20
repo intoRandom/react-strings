@@ -1,10 +1,22 @@
-******
-version 0.2.0
+version 0.3.0
+
+********** ERRORS
+object vs string
+
+********** TODO
 documentación
 
-config
-language
-provider
-locale
-get strings
-get locale
+<b>Negrita</b>
+<i>Cursiva</i>
+<u>Subrayado</u>
+<small>Texto pequeño</small>
+X<sup>2</sup> (Superíndice)
+H<sub>2</sub>O (Subíndice)
+
+********** NEW FEATURES
+useTrslation('path') -> KISS
+formats for dinamic -> plural, gender, dates, currency
+markdown
+{Str.GLASSES.shape[
+Str.GLASSES.shape[img.label as keyof typeof Str.GLASSES.shape]() -> dynamic values
+

@@ -14,6 +14,7 @@ export const TransitionComponent: FC<{
 				style={{
 					position: 'absolute',
 					inset: 0,
+					zIndex: 9999,
 					background: bgColor,
 					transition: isReady ? `opacity ${duration}ms ease-out` : '',
 					opacity: isReady ? 0 : 1,

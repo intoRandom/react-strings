@@ -72,14 +72,16 @@ export function createStrings<
 		/* locale?: keyof S | keyof L; */
 		locale?: string;
 	}) => {
-		const [language, setLanguage] = useState<string>(
-			locale ? String(locale) : ''
+		const validLocale = locale && locale in normalized ? locale : stringsKey;
+
+		const [language, setLanguage] = useState<string>(validLocale);
+
+		const [translation, setTranslation] = useState<D | undefined>(
+			normalized[validLocale]?.data
 		);
 
-		const [translation, setTranslation] = useState<D | undefined>(undefined);
-
 		const [contentDir, setContentDir] = useState<'ltr' | 'rtl' | undefined>(
-			undefined
+			normalized[validLocale]?.direction
 		);
 
 		const [isReady, setIsReady] = useState<boolean>(false);
@@ -95,57 +97,49 @@ export function createStrings<
 					browser
 				);
 
-				setLanguage(configLang);
-				document.documentElement.lang = configLang;
+				if (configLang !== language) {
+					setLanguage(configLang);
+					document.documentElement.lang = configLang;
+				}
 			};
 
 			loadConfig();
 		}, []);
 
 		useEffect(() => {
-			if (language === '') return;
-
 			let cancelled = false;
 
-			const setLanguageData = (data: any, direction: any) => {
-				if (!cancelled) {
-					setTranslation(data);
-					setContentDir(direction);
-				}
-			};
-			const fallbackToDefault = () => {
-				if (!cancelled) {
-					const defaultLang = normalized[stringsKey];
-					setLanguageData(defaultLang.data, defaultLang.direction);
-				}
-			};
+			const lang = normalized[language];
+			if (!lang) {
+				console.error(`Language "${language}" not found in normalized`);
+				return;
+			}
+
+			if (lang.data) {
+				setTranslation(lang.data);
+				setContentDir(lang.direction);
+				setIsReady(true);
+				return;
+			}
 
 			const loadLanguage = async () => {
-				const lang = normalized[language];
-				if (!lang) return;
+				if (!lang.loader) {
+					console.warn(`No data or loader for "${language}"`);
+					return;
+				}
 
 				try {
-					if (lang.data) {
-						setLanguageData(lang.data, lang.direction);
-					} else if (lang.loader) {
-						const module = await lang.loader();
-						const loadedData = module.default || module;
+					const module = await lang.loader();
+					const loadedData = module.default || module;
 
-						normalized[language] = { ...lang, data: loadedData };
-						setLanguageData(loadedData, lang.direction);
-					} else {
-						fallbackToDefault();
-					}
-				} catch (error) {
-					console.error(
-						`Failed to load language "${language}", falling back to default "${stringsKey}".`,
-						error
-					);
-					fallbackToDefault();
-				} finally {
 					if (!cancelled) {
+						normalized[language] = { ...lang, data: loadedData };
+						setTranslation(loadedData);
+						setContentDir(lang.direction);
 						setTimeout(() => setIsReady(true), duration);
 					}
+				} catch (error) {
+					console.error(`Failed to load "${language}"`, error);
 				}
 			};
 
@@ -153,23 +147,24 @@ export function createStrings<
 			return () => {
 				cancelled = true;
 			};
-		}, [language, normalized, duration]);
+		}, [language]);
 
 		const changeLanguage = useCallback(
 			async (newLang: string) => {
-				if (locale) return;
-
-				if (language === newLang) return;
-
 				const lang = normalized[newLang];
 				if (!lang) {
 					console.error(`Language: ${newLang} was not found in config file`);
 					return;
 				}
 
-				setIsReady(false);
-				setLanguage(newLang);
-				document.documentElement.lang = newLang;
+				if (language === newLang) return;
+
+				if (!locale) {
+					setIsReady(false);
+					setLanguage(newLang);
+					document.documentElement.lang = newLang;
+				}
+
 				if (storage) {
 					try {
 						localStorage.setItem('lang', newLang);

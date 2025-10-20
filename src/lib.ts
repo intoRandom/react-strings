@@ -6,6 +6,27 @@ import type {
 	NormalizedStrings,
 } from './types';
 
+// ============ SHARED HELPERS ============
+const isObject = (val: any): val is object =>
+	typeof val === 'object' && val !== null && !Array.isArray(val);
+
+const buildPath = (parentPath: string, key: string): string =>
+	parentPath ? `${parentPath}.${key}` : key;
+
+const isProd = () => process.env.NODE_ENV === 'production';
+
+// Para makeAccessorString
+const interpolate = (tpl: string, vars?: Vars) =>
+	tpl.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, p) =>
+		vars?.[p] == null ? '' : String(vars[p])
+	);
+
+const createAccessor = (value: string) =>
+	value.includes('{{')
+		? (vars?: Vars) => interpolate(value, vars)
+		: () => value;
+
+// ============ ACCESSOR STRING ============
 export function makeAccessorString<T extends object>(
 	objKeys: T,
 	objValues: any,
@@ -13,54 +34,36 @@ export function makeAccessorString<T extends object>(
 ): AccessorString<T> {
 	const result: any = {};
 
-	const interpolate = (tpl: string, vars?: Vars) =>
-		tpl.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, p) =>
-			vars?.[p] == null ? '' : String(vars[p])
-		);
+	for (const key in objKeys) {
+		if (!Object.prototype.hasOwnProperty.call(objKeys, key)) continue;
 
-	for (const key in objKeys as any) {
-		const currentPath = path ? `${path}.${key}` : key;
-		const valKeys = (objKeys as any)[key];
-		const valValues = objValues?.[key];
+		const currentPath = buildPath(path, key);
+		const valKey = objKeys[key];
+		const valValue = objValues?.[key];
 
-		if (valValues === undefined) {
-			if (valKeys && typeof valKeys === 'object' && !Array.isArray(valKeys)) {
-				result[key] = makeAccessorString(valKeys, {}, currentPath);
-			} else {
-				if (
-					process.env.NODE_ENV === 'production' &&
-					typeof valKeys === 'string'
-				) {
-					const tpl = valKeys;
-					result[key] = (repl?: Vars) =>
-						tpl.includes('{{') ? interpolate(tpl, repl) : tpl;
-				} else {
-					result[key] = () => currentPath;
-				}
-			}
-		} else if (typeof valValues === 'string') {
-			const tpl = valValues;
-			result[key] = (repl?: Vars) =>
-				tpl.includes('{{') ? interpolate(tpl, repl) : tpl;
-		} else if (
-			typeof valValues === 'number' ||
-			typeof valValues === 'boolean' ||
-			valValues === null
-		) {
-			const v = String(valValues);
-			result[key] = () => v;
-		} else if (Array.isArray(valValues)) {
-			result[key] = () => currentPath;
-		} else if (typeof valValues === 'object') {
-			result[key] = makeAccessorString(valKeys, valValues, currentPath);
-		} else {
-			result[key] = () => currentPath;
-		}
+		result[key] = processStringValue(valKey, valValue, currentPath);
 	}
 
 	return result as AccessorString<T>;
 }
 
+function processStringValue(valKey: any, valValue: any, path: string): any {
+	if (valValue !== undefined) {
+		if (typeof valValue === 'string') return createAccessor(valValue);
+		if (isObject(valValue)) return makeAccessorString(valKey, valValue, path);
+		if (['number', 'boolean'].includes(typeof valValue) || valValue === null) {
+			return () => String(valValue);
+		}
+		return () => path;
+	}
+
+	if (isObject(valKey)) return makeAccessorString(valKey, {}, path);
+	if (isProd() && typeof valKey === 'string') return createAccessor(valKey);
+
+	return () => path;
+}
+
+// ============ ACCESSOR ARRAY ============
 export function makeAccessorArray<T extends object>(
 	objKeys: T,
 	objValues: any,
@@ -69,28 +72,29 @@ export function makeAccessorArray<T extends object>(
 	const result: any = {};
 
 	for (const key in objKeys) {
-		const currentPath = path ? `${path}.${key}` : key;
-		const valKeys = objKeys[key];
-		const valValues = objValues?.[key];
+		if (!Object.prototype.hasOwnProperty.call(objKeys, key)) continue;
 
-		if (Array.isArray(valKeys)) {
-			if (Array.isArray(valValues)) {
-				result[key] = valValues;
-			} else {
-				if (process.env.NODE_ENV === 'production') {
-					result[key] = valKeys;
-				} else {
-					result[key] = [];
-				}
-			}
-		} else if (typeof valKeys === 'object' && valKeys !== null) {
-			result[key] = makeAccessorArray(valKeys as any, valValues, currentPath);
-		} else {
-			result[key] = [];
-		}
+		const currentPath = buildPath(path, key);
+		const valKey = objKeys[key];
+		const valValue = objValues?.[key];
+
+		result[key] = processArrayValue(valKey, valValue, currentPath);
 	}
 
 	return result;
+}
+
+function processArrayValue(valKey: any, valValue: any, path: string): any {
+	if (Array.isArray(valKey)) {
+		if (Array.isArray(valValue)) return valValue;
+		return isProd() ? valKey : [];
+	}
+
+	if (isObject(valKey)) {
+		return makeAccessorArray(valKey, valValue, path);
+	}
+
+	return [];
 }
 
 export function getBrowserLanguage(
