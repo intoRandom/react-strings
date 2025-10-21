@@ -1,3 +1,4 @@
+import React from 'react';
 import { makeAccessorArray, makeAccessorString } from './lib';
 
 /* Configuration */
@@ -51,16 +52,9 @@ export type StringsContext<U extends object> = {
 
 /* Accessors */
 
-export type AccessorArray<T> = {
-	[K in keyof T]: T[K] extends any[]
-		? T[K]
-		: T[K] extends object
-		? AccessorArray<T[K]>
-		: string[];
-};
-
 export type Vars = Record<string, any>;
-type LeafFn = (repl?: Vars) => string;
+
+type LeafFn = (repl?: Vars) => string | React.JSX.Element;
 
 type IsPlainObject<T> = T extends object
 	? T extends any[]
@@ -74,6 +68,16 @@ export type AccessorString<T> = {
 		: LeafFn;
 };
 
+export type AccessorArray<T> = {
+	[K in keyof T]: T[K] extends any[]
+		? T[K] extends object[]
+			? AccessorArray<T[K][number]>[]
+			: (string | React.JSX.Element)[]
+		: T[K] extends object
+		? AccessorArray<T[K]>
+		: (string | React.JSX.Element)[];
+};
+
 /* CONST */
 export const DEFAULT_DURATION = 200;
-export const DEFAULT_BGCOLOR = 'white';
+export const DEFAULT_BGCOLOR = 'black';

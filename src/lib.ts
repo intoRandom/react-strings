@@ -1,3 +1,4 @@
+import React from 'react';
 import type {
 	AccessorString,
 	AccessorArray,
@@ -6,7 +7,6 @@ import type {
 	NormalizedStrings,
 } from './types';
 
-// ============ SHARED HELPERS ============
 const isObject = (val: any): val is object =>
 	typeof val === 'object' && val !== null && !Array.isArray(val);
 
@@ -15,18 +15,51 @@ const buildPath = (parentPath: string, key: string): string =>
 
 const isProd = () => process.env.NODE_ENV === 'production';
 
-// Para makeAccessorString
-const interpolate = (tpl: string, vars?: Vars) =>
-	tpl.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, p) =>
+const TAGS: Record<string, keyof React.JSX.IntrinsicElements> = {
+	b: 'b',
+	i: 'i',
+	u: 'u',
+	small: 'small',
+	sup: 'sup',
+	sub: 'sub',
+};
+
+export function interpolate(text: string, vars?: Vars) {
+	return text.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, p) =>
 		vars?.[p] == null ? '' : String(vars[p])
 	);
+}
 
-const createAccessor = (value: string) =>
-	value.includes('{{')
-		? (vars?: Vars) => interpolate(value, vars)
-		: () => value;
+export function parseTags(text: string): React.JSX.Element | string {
+	const regex = /\{(\w+)\{(.*?)\}\}/g;
+	const parts: any[] = [];
+	let lastIndex = 0;
+	let match: RegExpExecArray | null;
 
-// ============ ACCESSOR STRING ============
+	while ((match = regex.exec(text)) !== null) {
+		const [full, tag, inner] = match;
+		const before = text.slice(lastIndex, match.index);
+		if (before) parts.push(before);
+
+		const Tag = TAGS[tag];
+		const parsedInner = parseTags(inner);
+
+		if (Tag) {
+			parts.push(React.createElement(Tag, { key: parts.length }, parsedInner));
+		} else {
+			parts.push(full);
+		}
+
+		lastIndex = match.index + full.length;
+	}
+
+	if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+
+	if (parts.length === 1) return parts[0];
+
+	return React.createElement(React.Fragment, null, ...parts);
+}
+
 export function makeAccessorString<T extends object>(
 	objKeys: T,
 	objValues: any,
@@ -43,33 +76,50 @@ export function makeAccessorString<T extends object>(
 
 		result[key] = processStringValue(valKey, valValue, currentPath);
 	}
-
 	return result as AccessorString<T>;
 }
 
 function processStringValue(valKey: any, valValue: any, path: string): any {
-	if (valValue !== undefined) {
-		if (typeof valValue === 'string') return createAccessor(valValue);
-		if (isObject(valValue)) return makeAccessorString(valKey, valValue, path);
-		if (['number', 'boolean'].includes(typeof valValue) || valValue === null) {
-			return () => String(valValue);
+	if (typeof valKey === 'string') {
+		if (typeof valValue !== 'string') {
+			if (!isProd()) {
+				return () => path;
+			}
+
+			const hasVars = /\{\{.*?\}\}/.test(valKey);
+			const hasTags = /\{(\w+)\{.*?\}\}/.test(valKey);
+
+			return (vars?: Vars) => {
+				let text = valKey;
+				if (hasVars) text = interpolate(text, vars);
+				if (hasTags) return parseTags(text);
+				return text;
+			};
 		}
-		return () => path;
+
+		const hasVars = /\{\{.*?\}\}/.test(valValue);
+		const hasTags = /\{(\w+)\{.*?\}\}/.test(valValue);
+
+		return (vars?: Vars) => {
+			let text = valValue;
+			if (hasVars) text = interpolate(text, vars);
+			if (hasTags) return parseTags(text);
+			return text;
+		};
 	}
 
-	if (isObject(valKey)) return makeAccessorString(valKey, {}, path);
-	if (isProd() && typeof valKey === 'string') return createAccessor(valKey);
+	if (isObject(valValue)) return makeAccessorString(valKey, valValue, path);
 
+	if (isObject(valKey)) return makeAccessorString(valKey, {}, path);
 	return () => path;
 }
 
-// ============ ACCESSOR ARRAY ============
 export function makeAccessorArray<T extends object>(
 	objKeys: T,
 	objValues: any,
 	path = ''
 ): AccessorArray<T> {
-	const result: any = {};
+	const result = {} as AccessorArray<T>;
 
 	for (const key in objKeys) {
 		if (!Object.prototype.hasOwnProperty.call(objKeys, key)) continue;
@@ -78,21 +128,45 @@ export function makeAccessorArray<T extends object>(
 		const valKey = objKeys[key];
 		const valValue = objValues?.[key];
 
-		result[key] = processArrayValue(valKey, valValue, currentPath);
+		result[key] = processArrayValue(valKey, valValue, currentPath) as any;
 	}
 
 	return result;
 }
 
-function processArrayValue(valKey: any, valValue: any, path: string): any {
+function processArrayValue(valKey: any, valValue: any, path: string) {
 	if (Array.isArray(valKey)) {
-		if (Array.isArray(valValue)) return valValue;
-		return isProd() ? valKey : [];
+		if (!Array.isArray(valValue)) {
+			if (!isProd()) {
+				console.warn(`[react-strings] Missing array at: ${path}`);
+				return [];
+			}
+			return valKey.map((v: any, i) => {
+				if (typeof v === 'string') {
+					const hasTags = /\{(\w+)\{.*?\}\}/.test(v);
+					return hasTags ? parseTags(v) : v;
+				}
+				if (isObject(v)) {
+					return makeAccessorArray(v, {}, buildPath(path, String(i)));
+				}
+				return v;
+			});
+		}
+
+		return valKey.map((v: any, i) => {
+			const value = valValue[i];
+			if (typeof v === 'string') {
+				const hasTags = /\{(\w+)\{.*?\}\}/.test(v);
+				return hasTags ? parseTags(v) : value ?? v;
+			}
+			if (isObject(v)) {
+				return makeAccessorArray(v, value, buildPath(path, String(i)));
+			}
+			return value ?? v;
+		});
 	}
 
-	if (isObject(valKey)) {
-		return makeAccessorArray(valKey, valValue, path);
-	}
+	if (isObject(valKey)) return makeAccessorArray(valKey, valValue, path);
 
 	return [];
 }

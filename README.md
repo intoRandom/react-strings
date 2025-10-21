@@ -17,6 +17,11 @@ A lightweight solution for managing languages and preferences with ease.
   Instantly access the right information with intelligent, developer-friendly autocompletion.
 - **Multi-Language Support 🗄️**  
   Manage single or multiple languages with a simple, centralized configuration.
+- **Inline Tag Styling Support ✨**  
+  Easily apply styles directly using standard HTML tags without any extra wrappers or CSS.<br>
+  Our system supports the following tags: `b`, `i`, `u`, `small`, `sup`, `sub`.
+- **Hook Factory Pattern for Safety & Segmentation 🛡️**  
+  Reusable hooks with isolated state for safer and cleaner component logic.
 - **Persistent User Preferences 🔒**  
   Automatically saves and restores the user’s language choice using `localStorage`.
 - **No Extra Server Configuration 🙅🏻**  
@@ -36,11 +41,11 @@ import { useStrings } from '@/data/stringConfig';
 
 export default function Home() {
   const { Str, Arr} = useStrings();
-  const ver = '0.2.0';
+  const ver = '0.3.0';
 
   return (
   <>
-    <StringsProvider stringConfig={stringConfig}>
+    <StringsProvider>
       <h1>{Str.home.title()}</h1>
       <p>{Str.home.version({ version: ver })}</p>
       <ul>
@@ -59,7 +64,7 @@ export default function Home() {
 ```js
 // en.json
 {
-	"title": "Welcome to react-strings",
+	"title": "Welcome to {b{react-strings}}",
 	"version": "Current version: {{version}}",
 	"features": [
 		{ "item": "Autocompletion", "data": "Remember keys" },
