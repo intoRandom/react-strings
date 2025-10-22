@@ -75,9 +75,25 @@ export type AccessorArray<T> = {
 			: (string | React.JSX.Element)[]
 		: T[K] extends object
 		? AccessorArray<T[K]>
-		: (string | React.JSX.Element)[];
+		: string | React.JSX.Element;
 };
 
 /* CONST */
 export const DEFAULT_DURATION = 200;
 export const DEFAULT_BGCOLOR = 'black';
+
+/* 
+
+caso 1: array de strings
+{
+	arrStr:["solo string", "string y {b{etiqueta}}"]
+}// el output debera ser (string | jsx)[]
+
+caso 2: array de objetos
+{
+	arrObj:[
+		{val1:"hola" val2:["hola", "{b{mundo}}"]},
+		{val1:"hello" val2:["hello", "{b{world}}"]},
+	]
+} el output debera ser {val1:string|jsx,val2:(string|jsx)[]}[]
+*/

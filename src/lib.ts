@@ -138,13 +138,13 @@ function processArrayValue(valKey: any, valValue: any, path: string) {
 	if (Array.isArray(valKey)) {
 		if (!Array.isArray(valValue)) {
 			if (!isProd()) {
-				console.warn(`[react-strings] Missing array at: ${path}`);
 				return [];
 			}
 			return valKey.map((v: any, i) => {
 				if (typeof v === 'string') {
-					const hasTags = /\{(\w+)\{.*?\}\}/.test(v);
-					return hasTags ? parseTags(v) : v;
+					const source = v;
+					const hasTags = /\{(\w+)\{.*?\}\}/.test(source);
+					return hasTags ? parseTags(source) : source;
 				}
 				if (isObject(v)) {
 					return makeAccessorArray(v, {}, buildPath(path, String(i)));
@@ -153,22 +153,34 @@ function processArrayValue(valKey: any, valValue: any, path: string) {
 			});
 		}
 
-		return valKey.map((v: any, i) => {
+		return valValue.map((v: any, i) => {
 			const value = valValue[i];
+
 			if (typeof v === 'string') {
-				const hasTags = /\{(\w+)\{.*?\}\}/.test(v);
-				return hasTags ? parseTags(v) : value ?? v;
+				const source = typeof value === 'string' ? value : v;
+				const hasTags = /\{(\w+)\{.*?\}\}/.test(source);
+				return hasTags ? parseTags(source) : source;
 			}
+
 			if (isObject(v)) {
 				return makeAccessorArray(v, value, buildPath(path, String(i)));
 			}
+
 			return value ?? v;
 		});
 	}
 
-	if (isObject(valKey)) return makeAccessorArray(valKey, valValue, path);
+	if (isObject(valKey)) {
+		return makeAccessorArray(valKey, valValue ?? {}, path);
+	}
 
-	return [];
+	if (typeof valKey === 'string') {
+		const source = typeof valValue === 'string' ? valValue : valKey;
+		const hasTags = /\{(\w+)\{.*?\}\}/.test(source);
+		return hasTags ? parseTags(source) : source ?? `[${path}]`;
+	}
+
+	return isObject(valKey) ? {} : `[${path}]`;
 }
 
 export function getBrowserLanguage(
